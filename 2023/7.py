@@ -8,7 +8,7 @@ class Card(int):
         else:
             value = {
                 "T": 10,
-                "J": 11,
+                "J": 0,
                 "Q": 12,
                 "K": 13,
                 "A": 15,
@@ -19,7 +19,7 @@ class Card(int):
         if self > 9:
             return {
                 10: "T",
-                11: "J",
+                0:  "J",
                 12: "Q",
                 13: "K",
                 15: "A",
@@ -40,7 +40,16 @@ class Hand():
     @property
     def strength(self):
         counter = Counter(self.cards)
-        _, counts = zip(*counter.most_common())
+        assert counter.total() == 5
+        n_jokers = counter[Card("J")]
+        most_common = counter.most_common()
+        if n_jokers > 0 and n_jokers != 5:
+            if Card("J") == most_common[0][0]:
+                counter[most_common[1][0]] += n_jokers
+            else:
+                counter[most_common[0][0]] += n_jokers
+            del counter[Card("J")]
+        cards, counts = zip(*counter.most_common())
         assert sum(counts) == 5
         hand_type_strength = sum(4 ** c for c in counts)
         return (hand_type_strength, *self.cards)
