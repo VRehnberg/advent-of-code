@@ -1,6 +1,10 @@
 import re
-from itertools import cycle
+from itertools import cycle, count
 from typing import IO, Iterable
+from math import lcm
+
+import numpy as np
+from tqdm import tqdm
 
 
 re_nodes = re.compile(r"^([0-9A-Z]+) = [(]([0-9A-Z]+), ([0-9A-Z]+)[)]$")
@@ -29,7 +33,7 @@ def task1(instructions, nodes):
             break
         location = nodes[location][instruct]
 
-    print(i_step)
+    return i_step
 
 
 class Loop:
@@ -37,22 +41,50 @@ class Loop:
         self.initial_node = initial_node
         location = self.initial_node
         loop_found = False
-        visited: list[tuple(int, str)] = []
-        for i_step, instruct in cycle(enumerate(instructions)):
-            if (i_step, location) in visited:
+        visited: dict[tuple(int, str), None] = {}  # ordered set
+        for i_instruct, instruct in cycle(enumerate(instructions)):
+            step_id = (i_instruct, location)
+            if step_id in visited:
                 break
+            visited[step_id] = None
             location = nodes[location][instruct]
-            visited.append((i_step, location))
 
-        self.offset = i_step
+        assert any(node.endswith("Z") for _, node in visited)
+
+        i_loop_start = list(visited.keys()).index(step_id)
         _, visited_nodes = zip(*visited)
-        self.loop = tuple(visited_nodes[i_step:])
+        self._nodes_before_loop = tuple(visited_nodes[:i_loop_start])
+        self.loop = tuple(visited_nodes[i_loop_start:])
+        self.offset = len(self._nodes_before_loop)
 
     def __len__(self):
         return len(self.loop)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.initial_node})"
+
+    @property
+    def stops(self):
+        #print(self._nodes_before_loop)
+        yield from (
+            i_step
+            for i_step, node in enumerate(self._nodes_before_loop)
+            if node.endswith("Z")
+        )
+        stops_in_loop = [
+            i_in_loop
+            for i_in_loop, node in enumerate(self.loop)
+            if node.endswith("Z")
+        ]
+        assert len(stops_in_loop) == 1
+        #print(self.loop)
+        #print(stops_in_loop)
+        assert len(stops_in_loop) >= 1
+        print(self, stops_in_loop, [self.loop[i] for i in stops_in_loop], self.offset)
+        for i_loop in count(start=0, step=1):
+            offset = self.offset + i_loop * len(self)
+            for stop in stops_in_loop:
+                yield stop + offset
 
 
 def task2(instructions, nodes):
@@ -66,27 +98,33 @@ def task2(instructions, nodes):
     locations = [loop.initial_node for loop in loops]
     print(locations)
 
-    # Check for stop before all loops have started
-    offset = max(loop.offset for loop in loops)
-    print(offset)
-    print([len(loop) for loop in loops])
-    for i_step, instruct in zip(range(offset), cycle(instructions)):
-        if all(loc.endswith("Z") for loc in locations):
-            print(i_step + 1)
-            return
-        locations = [nodes[loc][instruct] for loc in locations]
+    for loop in loops:
+        print(loop, f"{len(loop)} N + {next(iter(loop.stops))}")
 
-    print("TODO least_common_stop based on loops")
-    # Possible offsets are loop.offset + [i for i, n in loop if n.endswith("Z")]
-    # Check all LCM with offset for each
+        assert len(loop) == next(iter(loop.stops))
+
+    return lcm(*(len(loop) for loop in loops))
+    ## Loop over stops in loops
+    #stop_iters = [iter(loop.stops) for loop in loops]
+    #current_stops = np.array([next(stop_iter) for stop_iter in stop_iters])
+    #print(current_stops)
+    #all_stop = np.all(current_stops == current_stops[-1])
+    #while not all_stop:
+    #    for i_loop, stop_iter in enumerate(stop_iters):
+    #        if np.any(current_stops[i_loop] < current_stops):
+    #            current_stops[i_loop] = next(stop_iter)
+    #    all_stop = np.all(current_stops == current_stops[-1])
+
+    #assert np.all(current_stops == current_stops[0])
+    #return current_stops[0]
 
 
 def main():
     with open("8.in") as f:
         instructions, nodes = parse(f)
 
-    task1(instructions, nodes)
-    task2(instructions, nodes)
+    #print(task1(instructions, nodes))
+    print(task2(instructions, nodes))
 
 
 if __name__ == "__main__":
