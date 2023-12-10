@@ -1,4 +1,4 @@
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import dataclass
 from itertools import count
 from typing import IO
@@ -66,8 +66,8 @@ class Tile:
             return cls(
                 north=False,
                 south=True,
-                west=True,
-                east=False,
+                west=False,
+                east=True,
             )
         elif tile == ".":
             return cls(
@@ -106,6 +106,18 @@ class Tile:
             return "-"
         return "."
 
+    def get_start_directions(self):
+        directions = []
+        if not self.north:
+            directions.append("north")
+        if not self.south:
+            directions.append("south")
+        if not self.west:
+            directions.append("west")
+        if not self.east:
+            directions.append("east")
+        return directions
+
 
 def parse(file: IO) -> np.typing.NDArray[Tile]:
     grid = np.array([
@@ -121,22 +133,32 @@ def parse(file: IO) -> np.typing.NDArray[Tile]:
     return grid, (i, j)
 
 
-def get_steps_from_start(grid, start) -> Counter[tuple[int, int], int]:
-    def get_direction(prev_pos, curr_pos):
-        i_diff = curr_pos[0] - prev_pos[0]
-        j_diff = curr_pos[1] - prev_pos[1]
-        step = (i_diff, j_diff)
-        if step == (-1, 0):
-            return "north"
-        if step == (1, 0):
-            return "south"
-        if step == (0, -1):
-            return "west"
-        if step == (0, 1):
-            return "east"
+class MyDict(Counter):
+    def __missing__(self, key):
+        # Only want some aspects of counter
+        raise KeyError
 
-    def get_next_pos(curr_pos, last_direction):
-        i, j = curr_pos
+    def __or__(self, other):
+        '''Union is the minimum of value in either of the input counters.
+        >>> Counter('abbb') | Counter('bcc')
+        Counter({'b': 1, 'c': 2, 'a': 1})
+        '''
+        if not isinstance(other, Counter):
+            return NotImplemented
+
+        result = MyDict()
+        for elem, count in self.items():
+            other_count = other[elem]
+            result[elem] = count if count < other_count else other_count
+        for elem, count in other.items():
+            if elem not in self:
+                result[elem] = count
+        return result
+
+
+def get_steps_from_start(grid, start) -> MyDict[tuple[int, int], int]:
+    def get_next_pos(pos, last_direction):
+        i, j = pos
         tile = grid[i, j]
         if tile.north and last_direction != "south":
             return (i - 1, j), "north"
@@ -150,36 +172,56 @@ def get_steps_from_start(grid, start) -> Counter[tuple[int, int], int]:
             raise RuntimeError()
 
     def get_circuit(direction):
-        distance = Counter()
-        i, j = start
-        pos = deque(maxlen=2)
+        #print("---------------", start)
+        distance = MyDict()
+        pos = None
         for step in count():
-            if grid[i, j].is_start and len(pos) > 0:
+            if pos is None:
+                pos = start
+            elif grid[*pos].is_start:
                 break
-            assert (i, j) not in distance or len(pos) == 0
-            distance[(i, j)] = step
-            pos.append((i, j))
-            (i, j), direction = get_next_pos((i, j), direction)
+            else:
+                assert pos not in distance
+            distance[pos] = step
+            prev_dir = direction
+            pos, direction = get_next_pos(pos, direction)
+            #print(step, pos, prev_dir, direction)
+        return distance
+
+    def get_loop(direction):
+        loop = [start]
+        for step in count():
+            if pos is None:
+                pos = start
+            elif grid[*pos].is_start:
+                break
+            else:
+                assert pos not in distance
+            pos, direction = get_next_pos(pos, direction)
+            loop.append(pos)
+        return loop
         
-    steps_from_start = Counter()
-    if grid[*start].north:
-        steps_from_start = steps_from_start | get_circuit("north")
-    if grid[*start].south:
-        steps_from_start = steps_from_start | get_circuit("south")
-    if grid[*start].west:
-        steps_from_start = steps_from_start | get_circuit("west")
-    if grid[*start].east:
-        steps_from_start = steps_from_start | get_circuit("east")
+    steps_from_start = MyDict()
+    for direction in grid[*start].get_start_directions():
+        print(direction)
+        steps_from_start = steps_from_start | get_circuit(direction)
+    loop = get_loop(direction)
 
     return steps_from_start
 
 
 def main():
-    with open("10-example.in") as f:
+    with open("10.in") as f:
         grid, start = parse(f)
+    print(grid)
 
-    step: Counter[tuple[int, int], int] = get_steps_from_start(grid, start)
-    print(step.most_common(1))
+    steps: MyDict[tuple[int, int], int], loop = get_steps_from_start(grid, start)
+    print(steps.most_common(1))
+    str_grid = np.full_like(grid, fill_value=".", dtype=str)
+    for (i, j), n in steps.items():
+        str_grid[i, j] = f"{n}"
+    print(str_grid)
+
 
 
 if __name__ == "__main__":
