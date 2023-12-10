@@ -7,6 +7,9 @@ import numpy as np
 import numpy.typing
 
 
+np.set_printoptions(linewidth=200)
+
+
 @dataclass(kw_only=True)
 class Tile:
     north: bool
@@ -171,7 +174,7 @@ def get_steps_from_start(grid, start) -> MyDict[tuple[int, int], int]:
         else:
             raise RuntimeError()
 
-    def get_circuit(direction):
+    def get_circuit(direction, count_steps: bool = False):
         #print("---------------", start)
         distance = MyDict()
         pos = None
@@ -182,32 +185,34 @@ def get_steps_from_start(grid, start) -> MyDict[tuple[int, int], int]:
                 break
             else:
                 assert pos not in distance
-            distance[pos] = step
             prev_dir = direction
-            pos, direction = get_next_pos(pos, direction)
+            next_pos, direction = get_next_pos(pos, direction)
+            distance[pos] = step if count_steps else ((1 if (int(prev_dir=="north") or int(direction=="north")) else 3) * (int(grid[pos].north) + int(grid[pos].south)))
+            pos = next_pos
             #print(step, pos, prev_dir, direction)
         return distance
-
-    def get_loop(direction):
-        loop = [start]
-        for step in count():
-            if pos is None:
-                pos = start
-            elif grid[*pos].is_start:
-                break
-            else:
-                assert pos not in distance
-            pos, direction = get_next_pos(pos, direction)
-            loop.append(pos)
-        return loop
         
     steps_from_start = MyDict()
     for direction in grid[*start].get_start_directions():
         print(direction)
         steps_from_start = steps_from_start | get_circuit(direction)
-    loop = get_loop(direction)
+        break
 
     return steps_from_start
+#
+#
+#def get_loop(direction):
+#    loop = [start]
+#    for step in count():
+#        if pos is None:
+#            pos = start
+#        elif grid[*pos].is_start:
+#            break
+#        else:
+#            assert pos not in distance
+#        pos, direction = get_next_pos(pos, direction)
+#        loop.append(pos)
+#    return loop
 
 
 def main():
@@ -215,12 +220,32 @@ def main():
         grid, start = parse(f)
     print(grid)
 
-    steps: MyDict[tuple[int, int], int], loop = get_steps_from_start(grid, start)
+    steps: MyDict[tuple[int, int], int] = get_steps_from_start(grid, start)
     print(steps.most_common(1))
     str_grid = np.full_like(grid, fill_value=".", dtype=str)
     for (i, j), n in steps.items():
         str_grid[i, j] = f"{n}"
     print(str_grid)
+    count_inside = 0
+    for i in range(grid.shape[0]):
+        for j in range(grid.shape[1]):
+            if str_grid[i, j] != ".":
+                continue
+            if (
+                np.sum(str_grid[i, :j] == "1") // 2
+                + np.sum(str_grid[i, :j] == "2")
+                - np.sum(str_grid[i, :j] == "3") // 2
+                - np.sum(str_grid[i, :j] == "6") 
+            ) % 2 == 1:
+                count_inside += 1
+                str_grid[i, j] = "i"
+            else:
+                str_grid[i, j] = "o"
+
+    print(str_grid)
+    print(count_inside)
+
+
 
 
 
