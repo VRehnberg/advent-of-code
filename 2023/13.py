@@ -1,3 +1,4 @@
+from itertools import product
 from typing import IO, Iterator
 
 import numpy as np
@@ -29,11 +30,22 @@ def main():
     with open("13.in") as f:
         count = 0
         for block in get_blocks(f):
-            count += (
+            original_reflection_num = (
                 (100 * check_horizontal_mirror(block))
                 or check_horizontal_mirror(np.transpose(block))
             )
-            print(count)
+            for i, j in product(*(range(s) for s in block.shape)):
+                new_block = np.copy(block)
+                new_block[i, j] = "." if new_block[i, j] == "#" else "#"
+                new_reflection_num = (
+                    (100 * check_horizontal_mirror(new_block))
+                    or check_horizontal_mirror(np.transpose(new_block))
+                )
+                if new_reflection_num != 0 and original_reflection_num != new_reflection_num:
+                    print(i, j)
+                    break
+            count += new_reflection_num
+        print(count)
             #print(block)
 
 
